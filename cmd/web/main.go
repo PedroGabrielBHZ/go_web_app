@@ -1,22 +1,48 @@
 package main
 
 import (
+	"app/pkg/config"
 	"app/pkg/handlers"
+	"time"
+
 	"fmt"
+	"log"
 	"net/http"
+
+	"github.com/alexedwards/scs/v2"
 )
 
 const port = ":8080"
 
-func StartServer() {
-	http.HandleFunc("/", handlers.HomeHandler)
-	http.HandleFunc("/about", handlers.AboutHandler)
+var app config.AppConfig
 
-	fmt.Println("Starting server on port", port)
+var session *scs.SessionManager
+
+func StartServer() {
+	app.InProduction = false // Set to true in production
+	initializeSession()
+
+	repo := handlers.NewRepo(&app)
+	handlers.NewHandlers(repo)
+
 	fmt.Println("Access the server at: http://localhost" + port)
 	fmt.Println("Press Ctrl+C to stop the server")
+	srv := &http.Server{
+		Addr:    port,
+		Handler: routes(&app),
+	}
 
-	http.ListenAndServe(port, nil)
+	err := srv.ListenAndServe()
+	log.Fatal(err)
+}
+
+func initializeSession() {
+	session = scs.New()
+	session.Lifetime = 24 * time.Hour // 24 hours
+	session.Cookie.Persist = true
+	session.Cookie.SameSite = http.SameSiteLaxMode
+	session.Cookie.Secure = app.InProduction // Set to true in production
+	app.Session = session
 }
 
 func main() {
